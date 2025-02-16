@@ -28,6 +28,9 @@ try {
     if (response.ok) {
         messageDiv.textContent = "Tutoriel ajouté avec succès !";
         messageDiv.style.color = "green";
+        document.getElementById("url").value = "";
+document.getElementById("titre").value = "";
+document.getElementById("description").value = "";
     } else {
         messageDiv.textContent = "Erreur lors de l'ajout du tutoriel.";
         messageDiv.style.color = "red";
