@@ -1,14 +1,31 @@
-const express = require('express');
-const router = express.Router();
-const tutosService = require('../services/tutos');
+const db = require("./db"); // Importation du service de base de données
 
-router.post('/', async (req, res) => {
-    const { titre, url, description } = req.body;
-    if (!titre || !url) {
-        return res.status(400).json({ message: "Titre et URL obligatoires" });
-    }
-    const tuto = await tutosService.ajouterTuto(titre, url, description);
-    res.json(tuto);
-});
+const COLLECTION_NAME = "tutos"; // Nom de la collection/table
 
-module.exports = router;
+/**
+ * ✅ Ajoute un tutoriel dans la base de données.
+ * @param {Object} data - { titre, url, description }
+ * @returns {Object} - Le tutoriel ajouté
+ */
+async function ajouterTuto(data) {
+    const { titre, url, description } = data;
+    const newTuto = { titre, url, description, date: new Date() };
+    await db.insert(COLLECTION_NAME, newTuto);
+    return newTuto;
+}
+
+/**
+ * ✅ Recherche des tutoriels en fonction d’un mot-clé.
+ * @param {string} motclé - Mot-clé à rechercher dans le titre ou la description
+ * @returns {Array} - Liste des tutoriels trouvés
+ */
+async function rechercherTutos(motclé) {
+    if (!motclé) return await db.getAll(COLLECTION_NAME);
+
+    const regex = new RegExp(motclé, "i"); // Recherche insensible à la casse
+    return await db.find(COLLECTION_NAME, {
+        $or: [{ titre: regex }, { description: regex }]
+    });
+}
+
+module.exports = { ajouterTuto, rechercherTutos };

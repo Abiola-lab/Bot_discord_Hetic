@@ -1,16 +1,22 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
+const pool = require("../config/db");
 
-router.get('/', (req, res) => {
-    res.json({ message: "Liste des utilisateurs" });
-});
+// Récupérer les infos d'un utilisateur par son ID Discord
+router.get("/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [user] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
 
-router.post('/', (req, res) => {
-    const { username, email } = req.body;
-    if (!username || !email) {
-        return res.status(400).json({ message: "Nom d'utilisateur et email requis" });
+        if (user.length === 0) {
+            return res.status(404).json({ message: "Utilisateur non trouvé" });
+        }
+
+        res.json(user[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Erreur serveur" });
     }
-    res.json({ message: `Utilisateur ${username} ajouté avec succès` });
 });
 
 module.exports = router;
