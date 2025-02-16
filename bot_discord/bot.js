@@ -1,87 +1,108 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events } = require('discord.js');
 const dotenv = require('dotenv');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
-// Load environment variables from .env file
+// Charger les variables d'environnement
 dotenv.config();
 
-// Create a Discord bot client with required intents
+// Créer un client Discord avec les intentions requises
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ] 
 });
 
-const { checkWarnings } = require('commands/moderation/botwarning');
+// Collection pour stocker les commandes
+client.commands = new Collection();
 
-client.on('messageCreate', async message => {
+// 📂 **Charger toutes les commandes**
+const commandFolders = fs.readdirSync(path.join(__dirname, 'commands'));
+
+for (const folder of commandFolders) {
+    const folderPath = path.join(__dirname, 'commands', folder);
+    
+    // Vérifier si c'est un dossier ou un fichier
+    if (fs.statSync(folderPath).isDirectory()) {
+        const commandFiles = fs.readdirSync(folderPath).filter(file => file.endsWith(".js"));
+        for (const file of commandFiles) {
+            const command = require(`./commands/${folder}/${file}`);
+            if (command.data && command.execute) {
+                client.commands.set(command.data.name, command);
+            }
+        }
+    } else if (folder.endsWith(".js")) {
+        const command = require(`./commands/${folder}`);
+        if (command.data && command.execute) {
+            client.commands.set(command.data.name, command);
+        }
+    }
+}
+
+console.log(`✅ ${client.commands.size} commandes chargées.`);
+
+// 📡 **Quand le bot est prêt**
+client.once(Events.ClientReady, () => {
+    console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
+});
+
+// 📩 **Gestion des messages**
+client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
 
-    const forbiddenWords = ["ta gueule", "merde", "salope","con"]; //rajouter les autres inultes 
+    console.log(`💬 Message reçu : "${message.content}" par ${message.author.tag}`);
+
+    // ⚠️ **Filtrage des mots interdits**
+    const forbiddenWords = ["ta gueule", "merde", "salope", "con"];
     if (forbiddenWords.some(word => message.content.toLowerCase().includes(word))) {
-        await addWarning(message.author.id, message.guild.id, "Utilisation de langage inapproprié");
         await message.delete();
-        await message.channel.send(`⚠️ **${message.author.tag}**, attention à votre langage, vous risquez d'être banni !`);
+        await message.channel.send(`⚠️ **${message.author.tag}**, attention à votre langage, vous risquez un avertissement !`);
+        return;
+    }
 
-        const member = message.guild.members.cache.get(message.author.id);
-        await checkWarnings(member);
+    // 🚀 **Gestion des commandes (préfixe `!` ou `/`)**
+    const prefix = "!";  // Modifier si nécessaire
+    if (!message.content.startsWith(prefix)) return;
+
+    const args = message.content.slice(prefix.length).trim().split(/ +/);
+    const commandName = args.shift().toLowerCase();
+
+    const command = client.commands.get(commandName);
+    if (!command) {
+        return message.channel.send("❌ Commande inconnue.");
+    }
+
+    try {
+        await command.execute(message, args);
+        console.log(`✅ Commande exécutée : ${commandName} par ${message.author.tag}`);
+    } catch (error) {
+        console.error(`❌ Erreur lors de l'exécution de ${commandName}:`, error);
+        message.channel.send("⚠️ Une erreur est survenue lors de l'exécution de la commande.");
     }
 });
 
+// 🚀 **Gestion des commandes Slash**
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isCommand()) return;
 
-// Event triggered when the bot is ready and connected
-client.once('ready', () => {
-    console.log(`✅ Bot connected as ${client.user.tag}`);
-});
-
-// Event triggered when a message is sent in a server
-client.on('messageCreate', async message => {
-    // Ignore messages from other bots
-    if (message.author.bot) return;
-
-    // Command to search for a single tutorial
-    if (message.content.startsWith('/tuto')) {
-        const keyword = message.content.split(' ')[1]; // Extract keyword from command
-        if (!keyword) return message.channel.send("❌ Please provide a keyword after `/tuto`.");
-
-        try {
-            // Send a request to the API to search for tutorials
-            const response = await axios.get(`${process.env.API_URL}/tutos?search=${keyword}`);
-            const tuto = response.data[0]; // Select the first tutorial from the results
-
-            // Send the tutorial to the Discord channel
-            if (tuto) {
-                message.channel.send(`📚 **${tuto.titre}** : ${tuto.url}`);
-            } else {
-                message.channel.send(`🔍 No tutorials found for **${keyword}**.`);
-            }
-        } catch (error) {
-            console.error("❌ API Error:", error);
-            message.channel.send("⚠️ Error retrieving tutorials.");
-        }
+    const command = client.commands.get(interaction.commandName);
+    if (!command) {
+        console.error(`❌ Aucune commande trouvée pour ${interaction.commandName}`);
+        return;
     }
 
-    // Command to search for a list of tutorials
-    if (message.content.startsWith('/tutolist')) {
-        const keyword = message.content.split(' ')[1]; // Extract keyword
-        if (!keyword) return message.channel.send("❌ Please provide a keyword after `/tutolist`.");
-
-        try {
-            // Send a request to the API to search for tutorials
-            const response = await axios.get(`${process.env.API_URL}/tutos?search=${keyword}`);
-            const tutos = response.data;
-
-            // Send the list of tutorials to the Discord channel
-            if (tutos.length > 0) {
-                const tutoLinks = tutos.map(tuto => `📌 **${tuto.titre}** : ${tuto.url}`).join('\n');
-                message.channel.send(`📂 List of tutorials for **${keyword}** :\n${tutoLinks}`);
-            } else {
-                message.channel.send(`🔍 No tutorials found for **${keyword}**.`);
-            }
-        } catch (error) {
-            console.error("❌ API Error:", error);
-            message.channel.send("⚠️ Error retrieving tutorials.");
-        }
+    try {
+        await command.execute(interaction);
+        console.log(`✅ Slash Command exécutée : ${interaction.commandName}`);
+    } catch (error) {
+        console.error(`❌ Erreur lors de l'exécution de la commande ${interaction.commandName}:`, error);
+        await interaction.reply({ content: "⚠️ Une erreur est survenue lors de l'exécution de la commande.", ephemeral: true });
     }
 });
 
-// Log in the bot using the token from the .env file
+// 📌 **Connexion du bot**
 client.login(process.env.BOT_TOKEN);
