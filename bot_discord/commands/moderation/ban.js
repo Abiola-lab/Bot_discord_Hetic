@@ -1,30 +1,41 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
+    // Definition of the "/ban" slash command
     data: new SlashCommandBuilder()
         .setName('ban')
-        .setDescription('Bannit un utilisateur du serveur.')
-        .addUserOption(option =>
-            option.setName('utilisateur')
-                .setDescription("L'utilisateur à bannir")
-                .setRequired(true))
+        .setDescription('Bans a user from the server.')
+        .addUserOption(option => 
+            option.setName('user')
+                .setDescription("The user to ban")
+                .setRequired(true)) // The user is required
         .addStringOption(option =>
-            option.setName('raison')
-                .setDescription("Raison du bannissement")
-                .setRequired(false)),
+            option.setName('reason')
+                .setDescription("Reason for the ban")
+                .setRequired(false)), // The reason is optional
 
     async execute(interaction) {
-        const user = interaction.options.getUser('utilisateur');
-        const reason = interaction.options.getString('raison') || 'Aucune raison spécifiée';
+        // Retrieve the mentioned user
+        const user = interaction.options.getUser('user');
+        // Retrieve the provided reason or set a default value
+        const reason = interaction.options.getString('reason') || 'No reason specified';
 
+        // Check if the user executing the command has the "BAN_MEMBERS" permission
         if (!interaction.member.permissions.has('BAN_MEMBERS')) {
-            return interaction.reply({ content: "❌ Vous n'avez pas la permission de bannir un membre.", ephemeral: true });
+            return interaction.reply({ 
+                content: "❌ You don't have permission to ban members.", 
+                ephemeral: true // Response is only visible to the user executing the command
+            });
         }
 
+        // Retrieve the member from the server
         const member = interaction.guild.members.cache.get(user.id);
-        if (!member) return interaction.reply("❌ Utilisateur introuvable.");
+        if (!member) return interaction.reply("❌ User not found.");
 
+        // Execute the ban with the specified reason
         await member.ban({ reason });
-        await interaction.reply(`🚨 **${user.tag}** a été banni pour **${reason}**.`);
+
+        // Send a confirmation message
+        await interaction.reply(`🚨 **${user.tag}** has been banned for **${reason}**.`);
     }
 };
