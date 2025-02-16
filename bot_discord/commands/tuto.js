@@ -2,20 +2,28 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 const tutoService = require('../services/tutoService');
 
 module.exports = {
+    // Define the slash command with its name and description
     data: new SlashCommandBuilder()
         .setName('tuto')
-        .setDescription('Récupère un tuto spécifique par mot-clé')
+        .setDescription('Retrieve a specific tutorial by keyword')
         .addStringOption(option =>
             option.setName('keyword')
-                .setDescription('Mot-clé du tutoriel')
+                .setDescription('Keyword for the tutorial')
                 .setRequired(true)),
+
     async execute(interaction) {
+        // Get the keyword entered by the user
         const keyword = interaction.options.getString('keyword');
+
+        // Fetch tutorials matching the keyword from the service
         const tuto = await tutoService.rechercherTutos(keyword);
+
         if (tuto.length > 0) {
-            interaction.reply(`Voici un tuto pour **${keyword}** : ${tuto[0].url}`);
+            // Reply with the first tutorial found
+            interaction.reply(`Here is a tutorial for **${keyword}**: ${tuto[0].url}`);
         } else {
-            interaction.reply(`Aucun tuto trouvé pour **${keyword}**.`);
+            // Reply if no tutorial is found
+            interaction.reply(`No tutorial found for **${keyword}**.`);
         }
     },
 };
